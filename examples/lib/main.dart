@@ -2,7 +2,7 @@ import 'dart:core';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
-import '../lib/banner_widget.dart';
+import 'package:flutter_banner/banner_widget.dart';
 
 void main() {
   runApp(MyApp());
@@ -81,8 +81,24 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       backgroundColor: Colors.orangeAccent,
-      body: Center(
-        child: _bannerWidget,
+      body: Column(
+        children: <Widget>[
+          Center(
+            child: _bannerWidget,
+          ),
+          RaisedButton(
+            child: Text('stop Loop'),
+            onPressed: () {
+              _bannerWidget.stopLoop();
+            },
+          ),
+          RaisedButton(
+            child: Text('start Loop'),
+            onPressed: () {
+              _bannerWidget.startLoop();
+            },
+          ),
+        ]
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }

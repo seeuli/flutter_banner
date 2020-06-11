@@ -32,6 +32,15 @@ class BannerWidget extends StatefulWidget {
   int get currentPage => _pageNotifier.value;
   final ValueNotifier<int> _pageNotifier = ValueNotifier(0);
 
+  /// 轮播控制
+  final ValueNotifier<bool> _loopNotifier = ValueNotifier(false);
+
+  /// 停止滚动
+  void stopLoop() => _loopNotifier.value = true;
+
+  /// 开始滚动
+  void startLoop() => _loopNotifier.value = false;
+
   @override
   State<StatefulWidget> createState() => _BannerWidgetState();
 }
@@ -95,6 +104,7 @@ class _BannerWidgetState extends State<BannerWidget> {
     }
 
     widget._pageNotifier.value = _currentPage;
+    widget._loopNotifier.addListener(_loopControl);
   }
 
   @override
@@ -103,6 +113,7 @@ class _BannerWidgetState extends State<BannerWidget> {
     _pageController.dispose();
     _stopAutoLoopTimer();
     _stopUserGestureDetectorTimer();
+    widget._loopNotifier.removeListener(_loopControl);
   }
 
   @override
@@ -116,6 +127,16 @@ class _BannerWidgetState extends State<BannerWidget> {
       child: contentWidget,
       onNotification: _notificationListener,
     );
+  }
+
+  /// 轮播控制
+  void _loopControl() {
+    if (widget._loopNotifier.value == true) {
+      _stopAutoLoopTimer();
+    }
+    else {
+      _startAutoLoopTimer();
+    }
   }
 
   void _startAutoLoopTimer() {

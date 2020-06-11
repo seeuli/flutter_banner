@@ -44,6 +44,11 @@ A Flutter banner widget, only build once after created.
 
 ### 3、support autoloop，user draging
 
-![auto](example/images/auto.gif)
-![drag_left](example/images/drag_left.gif)
-![drag_right](example/images/drag_right.gif)
+banner自动滚动
+![auto](images/auto.gif)
+
+向左拖拽
+![drag_left](images/drag_left.gif)
+
+向右拖拽
+![drag_right](images/drag_right.gif)
