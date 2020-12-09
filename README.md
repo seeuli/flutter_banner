@@ -5,22 +5,27 @@ A Flutter banner widget, only build once after created.
 ## Getting Started
 ### 1、add dependency to you `pubspec.yaml`
 ```
-    flutter_banner: ^1.0.0
+    flutter_banner: ^1.1.0
 ```
 
 ### 2、user guide, see `example/example_main.dart` 
 ```
     import 'package:flutter_banner/banner_widget.dart'
 
-    var delegate = BannerDelegate(
-        childAtIndex: (idx) => Container(),
-        numberOfBanners: 5,
-        width: 200,
-        hight: 60,
+    BannerWidget banner = BannerWidget(
+        delegate: BannerDelegate(
+            childAtIndex: (idx) => Container(),
+            numberOfBanners: 5,
+        ),
+        pageIndicator: PageIndicator(),
     );
-    var banner = BannerWidget(
-        delegate: delegate,
-        pageIndicator: PageIndicator(numberOfPages: 5),
+    banner.delegate.numberOfBanners.value = data.length;
+    banner.pageIndicator.numberOfPages.value = data.length;
+
+    return Container(
+        child: banner,
+        width: 200,
+        height: 80,
     );
 ```
 
@@ -43,12 +48,3 @@ A Flutter banner widget, only build once after created.
 ```
 
 ### 3、support autoloop，user draging
-
-banner自动滚动
-![auto](images/auto.gif)
-
-向左拖拽
-![drag_left](images/drag_left.gif)
-
-向右拖拽
-![drag_right](images/drag_right.gif)

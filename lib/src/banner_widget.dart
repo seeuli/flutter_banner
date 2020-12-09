@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'banner_delegate.dart';
+export 'banner_delegate.dart';
+
 import 'page_indicator_widget.dart';
+export 'page_indicator_widget.dart';
 
 /// 实现思路：使用 n+2 个视图，在达到边界时滚动PageView到对应的页面。PageView的page不是真正的页码，页码需要单独计算。
 /// 
@@ -15,6 +18,7 @@ import 'page_indicator_widget.dart';
 ///   1、同样采用 n+2 个视图的banner_view[https://github.com/yangxiaoweihn/BannerView]；
 /// 
 ///   2、采用 n*IntegerMax 个视图的flutter_banner_swiper[https://github.com/liuwangle/flutter_banner_swiper]。
+/// 
 class BannerWidget extends StatefulWidget {
 
   BannerWidget({
@@ -33,14 +37,14 @@ class BannerWidget extends StatefulWidget {
   final ValueNotifier<int> _pageNotifier = ValueNotifier(0);
 
   /// 轮播控制
-  final ValueNotifier<bool> _loopNotifier = ValueNotifier(false);
-
+  final ValueNotifier<bool> _stopLoopNotifier = ValueNotifier(false);
+ 
   /// 停止滚动
-  void stopLoop() => _loopNotifier.value = true;
-
+  void stopLoop() => _stopLoopNotifier.value = true;
+ 
   /// 开始滚动
-  void startLoop() => _loopNotifier.value = false;
-
+  void startLoop() => _stopLoopNotifier.value = false;
+ 
   @override
   State<StatefulWidget> createState() => _BannerWidgetState();
 }
@@ -54,8 +58,10 @@ class _BannerWidgetState extends State<BannerWidget> {
   List<Widget> _cache = List();
   /// PageView 页码控制
   PageController _pageController;
+  /// 页面动画持续时长
+  Duration _pagingDuration;
   /// 总页数
-  int get _numberOfPages => widget.delegate.numberOfBanners;
+  int get _numberOfPages => widget.delegate.numberOfBanners.value;
   /// PageView 滚动页数。总页数请使用 _numberOfPages
   int get _pages => _infinite ? _numberOfPages + 2 : _numberOfPages;
   /// 当前索引，页码请使用_currentPage
@@ -81,39 +87,22 @@ class _BannerWidgetState extends State<BannerWidget> {
   @override
   void initState() {
     super.initState();
-
-    _pageController = PageController();
-    for (int idx = 0; idx < _numberOfPages; idx ++) {
-      Widget item = widget.delegate.childAtIndex(idx);
-      _cache.add(item);
-    }
-    _children.addAll(_cache);
-
-    if (_infinite || _autoLoop) {
-      _children.insert(0, _cache.last);
-      _children.add(_cache.first);
-      _pageController = PageController(initialPage: 1);
-      _index = 1;
-    }
-    else {
-      _pageController = PageController();
-    }
-
+    _setup();
+    widget._stopLoopNotifier.addListener(_loopControl);
+    widget.delegate.numberOfBanners.addListener(_bannerTotalPagesChange);
     if (_autoLoop) {
       _startAutoLoopTimer();
     }
-
-    widget._pageNotifier.value = _currentPage;
-    widget._loopNotifier.addListener(_loopControl);
   }
 
   @override
   void dispose() {
-    super.dispose();
     _pageController.dispose();
     _stopAutoLoopTimer();
     _stopUserGestureDetectorTimer();
-    widget._loopNotifier.removeListener(_loopControl);
+    widget._stopLoopNotifier.removeListener(_loopControl);
+    widget.delegate.numberOfBanners.removeListener(_bannerTotalPagesChange);
+    super.dispose();
   }
 
   @override
@@ -129,9 +118,51 @@ class _BannerWidgetState extends State<BannerWidget> {
     );
   }
 
+  /// 初始化数据
+  void _setup() {
+    _children.clear();
+    _cache.clear();
+    _currentPage = 0;
+    _jumping = false;
+    _userDraging = false;
+    _pagingDuration = widget.delegate.duration ?? Duration(milliseconds: 250);
+    _userGestureDetectorCounter = 0;
+    _stopUserGestureDetectorTimer();
+    _stopAutoLoopTimer();
+
+    for (int idx = 0; idx < _numberOfPages; idx ++) {
+      Widget item = widget.delegate.childAtIndex(idx);
+      _cache.add(item);
+    }
+    _children.addAll(_cache);
+
+    if ((_infinite || _autoLoop) && _cache.length > 1) {
+      _children.insert(0, _cache.last);
+      _children.add(_cache.first);
+      _pageController = PageController(initialPage: 1);
+      _index = 1;
+    }
+    else {
+      _pageController = PageController();
+      _index = 0;
+    }
+    widget._pageNotifier.value = _currentPage;
+  }
+
+  /// 总页数变化，先停止定时器，然后如果需要再重新开启
+  void _bannerTotalPagesChange() {
+    _setup();
+    if (context != null && mounted) {
+      setState(() {});
+    }
+    if (_autoLoop) {
+      _startAutoLoopTimer();
+    }
+  }
+
   /// 轮播控制
   void _loopControl() {
-    if (widget._loopNotifier.value == true) {
+    if (widget._stopLoopNotifier.value == true || _numberOfPages < 2) {
       _stopAutoLoopTimer();
     }
     else {
@@ -145,15 +176,15 @@ class _BannerWidgetState extends State<BannerWidget> {
     _autoLoopTimer = Timer.periodic(autoLoopInterval, (timer) {
       int page = _index + 1;
       _pageController.animateToPage(page,
-        duration: widget.delegate.duration ?? Duration(milliseconds: 250), 
+        duration: _pagingDuration, 
         curve: widget.delegate.curve ?? Curves.easeInOut,
       );
     });
   }
 
   void _stopAutoLoopTimer() {
-    if (_autoLoop == false || _autoLoopTimer == null) return;
-    _autoLoopTimer.cancel();
+    if (_autoLoopTimer == null) return;
+    _autoLoopTimer?.cancel();
     _autoLoopTimer = null;
   }
 
@@ -161,7 +192,7 @@ class _BannerWidgetState extends State<BannerWidget> {
   void _startUserGestureDetectorTimer() {
     if (_autoLoop == false || _userGestureDetectorTimer != null)  return;
     _userGestureDetectorTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
-      _debugLog('Detector --- $_userDraging, $_userGestureDetectorCounter');
+      _debugLog('_BannerWidgetState Detector --- $_userDraging, $_userGestureDetectorCounter');
       if (_userDraging == false || _userGestureDetectorCounter >= _needDetectorUserGestureTimes) {
         _userDraging = false;
         _userGestureDetectorCounter = 0;
@@ -176,7 +207,7 @@ class _BannerWidgetState extends State<BannerWidget> {
 
   void _stopUserGestureDetectorTimer() {
     if (_autoLoop == false || _userGestureDetectorTimer == null)  return;
-    _userGestureDetectorTimer.cancel();
+    _userGestureDetectorTimer?.cancel();
     _userGestureDetectorTimer = null;
   }
 
@@ -184,7 +215,7 @@ class _BannerWidgetState extends State<BannerWidget> {
   // 需要开启轮询检测用户当前是否还在拖拽
   bool _notificationListener(Notification noti) {
     if (noti is UserScrollNotification) {
-      _debugLog('用户拖拽 --- ${noti.runtimeType}');
+      _debugLog('_BannerWidgetState User Drag --- ${noti.runtimeType}');
       if (_userDraging == false) {  // 用户开始触摸
         _userDraging = true;
       }
@@ -196,12 +227,12 @@ class _BannerWidgetState extends State<BannerWidget> {
       _stopAutoLoopTimer();
     }
     else if (noti is ScrollStartNotification) { // 调用一次
-      _debugLog('开始滚动 --- ${noti.runtimeType}');
+      _debugLog('_BannerWidgetState Start Scroll --- ${noti.runtimeType}');
     }
     else if (noti is ScrollUpdateNotification) {  // 滚动中多次调用
     }
     else if (noti is ScrollEndNotification) {
-      _debugLog('结束滚动 --- ${noti.runtimeType}');
+      _debugLog('_BannerWidgetState End Scroll --- ${noti.runtimeType}');
       if (_userDraging) {   // 停止滚动
         _stopUserGestureDetectorTimer();
         _userDraging = false;
@@ -212,14 +243,8 @@ class _BannerWidgetState extends State<BannerWidget> {
   }
 
   void _pageChange(int page) {
-    int prePage = _currentPage;
     if (_infinite == false && _autoLoop == false) {
-      _currentPage = page;
-      if (widget.onPageChange != null) {
-        widget.onPageChange(prePage, _currentPage);
-      }
-      widget._pageNotifier.value = _currentPage;
-      _updateIndicator();
+      _pageChangeNotifier(_currentPage, page);
       return;
     }
 
@@ -228,41 +253,39 @@ class _BannerWidgetState extends State<BannerWidget> {
       return;
     }
     if (_index == _pages - 2 && page == _pages - 1) {
-      // 当前已是最后一页，但仍然向左拖拽。需要恢复到第0页。
-      _index = 1;
-      _currentPage = 0;
-      _debugLog('_BannerWidgetState.jumpToPage 0 $page idx:$_index, page:$_currentPage');
+      // 当前已是最后一页，但仍然向左拖拽（或定时器继续向右滚动）。需要恢复到第0页。
       _jumping = true;
-      Future.delayed(Duration(milliseconds: 250)).whenComplete(() {
+      Future.delayed(_pagingDuration).whenComplete(() {
+        _index = 1;
+        _pageChangeNotifier(_currentPage, 0);
         _pageController.jumpToPage(_index);
+        _debugLog('0 _BannerWidgetState.jumpToPage: $page, idx $_index, page $_currentPage');
       });
     }
     else if (_index == 1 && page == 0) {
       // 当前是第0页，但仍然向右拖拽。需要恢复到最后一页。
-      _index = _pages - 2;
-      _currentPage = _numberOfPages - 1;
-      _debugLog('_BannerWidgetState.jumpToPage 1, $page idx:$_index, page:$_currentPage');
       _jumping = true;
-      Future.delayed(Duration(milliseconds: 250)).whenComplete(() {
+      Future.delayed(_pagingDuration).whenComplete(() {
+        _index = _pages - 2;
+        _pageChangeNotifier(_currentPage, _numberOfPages - 1);
         _pageController.jumpToPage(_index);
+        _debugLog('1 _BannerWidgetState.jumpToPage: $page, idx $_index, page $_currentPage');
       });
     }
-    else {
+    else {  // 正常滚动、定时器滚动
       _index = page;
-      _currentPage = page - 1;
+      _pageChangeNotifier(_currentPage, page - 1);
+      _debugLog('2 _BannerWidgetState.jumpToPage: $page, idx $_index, page $_currentPage');
     }
-
-    if (widget.onPageChange != null) {
-      widget.onPageChange(prePage, _currentPage);
-    }
-    widget._pageNotifier.value = _currentPage;
-    _updateIndicator();
-    _debugLog('_BannerWidgetState._pageChange idx:$_index, page:$_currentPage');
   }
 
-  void _updateIndicator() {
-    if (widget.pageIndicator == null) return;
-    widget.pageIndicator.currentPage.value = _currentPage;
+  void _pageChangeNotifier(int prePage, int curPage) {
+    _currentPage = curPage;
+    widget._pageNotifier.value = _currentPage;
+    if (widget.onPageChange != null) {
+      widget.onPageChange(prePage, curPage);
+    }
+    widget.pageIndicator?.updateCurrentPage(_currentPage);
   }
 
   void _debugLog(String log) {
@@ -284,7 +307,10 @@ class _BannerWidgetState extends State<BannerWidget> {
         contentWidget = Stack(
           alignment: Alignment.topCenter,
           children: <Widget>[
-            pageView,
+            Padding(
+              padding: widget.delegate.bannerInsets,
+              child: pageView,
+            ),
             _indicatorWidget(),
           ],
         );
@@ -297,9 +323,7 @@ class _BannerWidgetState extends State<BannerWidget> {
     return GestureDetector(
       child: Container(
         child: contentWidget,
-        decoration: widget.delegate.decoration ?? BoxDecoration(color: Colors.white),
-        width: widget.delegate.width,
-        height: widget.delegate.height,
+        decoration: widget.delegate.decoration ?? BoxDecoration(color: Colors.white)
       ),
       onTap: () {
         if (widget.delegate.onTap == null)  return;
