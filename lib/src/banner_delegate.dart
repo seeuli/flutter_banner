@@ -13,6 +13,7 @@ class BannerDelegate {
     this.scrollDirection = Axis.horizontal,
     this.bannerInsets = EdgeInsets.zero,
     this.indicatorInsets = const EdgeInsets.only(bottom: 12),
+    this.exceptionTrace,
     @required this.childAtIndex,
   }): assert(childAtIndex != null);
 
@@ -20,7 +21,7 @@ class BannerDelegate {
   final ValueNotifier<int> numberOfBanners = ValueNotifier(0);
   /// 自动循环，设置为ture时忽略infinite属性，默认可无限循环；data长度小于2时无效；
   final bool autoLoop;
-  /// 首尾切换效果跟其他页面一致(无限循环)，在不使用autoLoop时也可无限滚动；data长度小于2时无效
+  /// 首尾切换效果跟其他页面一致(无限循环)；data长度小于2时无效
   final bool infinite;
   /// 翻页时间
   final Duration duration;
@@ -42,4 +43,6 @@ class BannerDelegate {
   final BoxDecoration decoration;
   /// 禁用调试日志，默认true
   final bool disableLog;
+  /// 异常统计
+  final void Function(String) exceptionTrace; 
 }
